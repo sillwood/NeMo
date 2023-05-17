@@ -141,7 +141,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
         speaker_emb_condition_prosody = cfg.get("speaker_emb_condition_prosody", False)
         speaker_emb_condition_decoder = cfg.get("speaker_emb_condition_decoder", False)
         speaker_emb_condition_aligner = cfg.get("speaker_emb_condition_aligner", False)
-        energy_embedding_kernel_size = cfg.get("energy_embedding_kernel_size", 0)
+        energy_embedding_kernel_size = cfg.get("energy_embedding_kernel_size", 1)
         energy_predictor = instantiate(self._cfg.get("energy_predictor", None))
 
         self.fastpitch = FastPitchModule(
