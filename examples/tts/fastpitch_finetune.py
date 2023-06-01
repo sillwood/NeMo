@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
 import pytorch_lightning as pl
 
 from nemo.collections.common.callbacks import LogEpochTimeCallback
@@ -30,7 +31,9 @@ def main(cfg):
     trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
     model = FastPitchModel(cfg=cfg.model, trainer=trainer)
+    model.fastpitch.speaker_emb = torch.nn.Embedding(174, cfg.model.symbols_embedding_dim)
     model.maybe_init_from_pretrained_checkpoint(cfg=cfg)
+    model.fastpitch.speaker_emb = torch.nn.Embedding(175, cfg.model.symbols_embedding_dim)
     lr_logger = pl.callbacks.LearningRateMonitor()
     epoch_time_logger = LogEpochTimeCallback()
     trainer.callbacks.extend([lr_logger, epoch_time_logger])
