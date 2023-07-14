@@ -138,6 +138,7 @@ class FastPitchModule(NeuralModule):
         energy_predictor: NeuralModule,
         aligner: NeuralModule,
         n_speakers: int,
+        n_emotions: int,
         symbols_embedding_dim: int,
         pitch_embedding_kernel_size: int,
         energy_embedding_kernel_size: int,
@@ -167,6 +168,10 @@ class FastPitchModule(NeuralModule):
         else:
             self.speaker_emb = None
 
+        if n_emotions > 1:
+            self.emotion_emb = torch.nn.Embedding(n_emotions, symbols_embedding_dim)
+        else:
+            self.emotion_emb = None
         self.max_token_duration = max_token_duration
         self.min_token_duration = 0
 
@@ -199,6 +204,7 @@ class FastPitchModule(NeuralModule):
             "pitch": NeuralType(('B', 'T_audio'), RegressionValuesType()),
             "energy": NeuralType(('B', 'T_audio'), RegressionValuesType(), optional=True),
             "speaker": NeuralType(('B'), Index(), optional=True),
+            "emotion": NeuralType(('B'), Index(), optional=True),
             "pace": NeuralType(optional=True),
             "spec": NeuralType(('B', 'D', 'T_spec'), MelSpectrogramType(), optional=True),
             "attn_prior": NeuralType(('B', 'T_spec', 'T_text'), ProbsType(), optional=True),
@@ -232,6 +238,7 @@ class FastPitchModule(NeuralModule):
         pitch=None,
         energy=None,
         speaker=None,
+        emotion=None,
         pace=1.0,
         spec=None,
         attn_prior=None,
@@ -248,6 +255,12 @@ class FastPitchModule(NeuralModule):
             spk_emb = 0
         else:
             spk_emb = self.speaker_emb(speaker).unsqueeze(1)
+
+        if self.emotion_emb is None or emotion is None:
+            emo_emb = 0
+        else:
+            emo_emb = self.emotion_emb(emotion).unsqueeze(1)
+            spk_emb = spk_emb + emo_emb
 
         # Input FFT
         enc_out, enc_mask = self.encoder(input=text, conditioning=spk_emb)
