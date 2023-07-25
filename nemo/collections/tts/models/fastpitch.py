@@ -152,6 +152,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             energy_predictor,
             self.aligner,
             cfg.n_speakers,
+            cfg.get("n_emotions", 0),
             cfg.symbols_embedding_dim,
             cfg.pitch_embedding_kernel_size,
             energy_embedding_kernel_size,
@@ -284,6 +285,27 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
         x = torch.tensor(tokens).unsqueeze_(0).long().to(self.device)
         return x
 
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        state_dict = checkpoint["state_dict"]
+        model_state_dict = self.state_dict()
+        is_changed = False
+        for k in state_dict:
+            if k in model_state_dict:
+                if state_dict[k].shape != model_state_dict[k].shape:
+                    '''
+                    logger.info(f"Skip loading parameter: {k}, "
+                                f"required shape: {model_state_dict[k].shape}, "
+                                f"loaded shape: {state_dict[k].shape}")
+                    '''
+                    state_dict[k] = model_state_dict[k]
+                    is_changed = True
+            else:
+                logger.info(f"Dropping parameter {k}")
+                is_changed = True
+
+        if is_changed:
+            checkpoint.pop("optimizer_states", None)
+
     @typecheck(
         input_types={
             "text": NeuralType(('B', 'T_text'), TokenIndex()),
@@ -291,6 +313,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             "pitch": NeuralType(('B', 'T_audio'), RegressionValuesType()),
             "energy": NeuralType(('B', 'T_audio'), RegressionValuesType(), optional=True),
             "speaker": NeuralType(('B'), Index(), optional=True),
+            "emotion": NeuralType(('B'), Index(), optional=True),
             "pace": NeuralType(optional=True),
             "spec": NeuralType(('B', 'D', 'T_spec'), MelSpectrogramType(), optional=True),
             "attn_prior": NeuralType(('B', 'T_spec', 'T_text'), ProbsType(), optional=True),
@@ -306,6 +329,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
         pitch=None,
         energy=None,
         speaker=None,
+        emotion=None,
         pace=1.0,
         spec=None,
         attn_prior=None,
@@ -318,6 +342,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             pitch=pitch,
             energy=energy,
             speaker=speaker,
+            emotion=emotion,
             pace=pace,
             spec=spec,
             attn_prior=attn_prior,
@@ -349,6 +374,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             pitch = batch_dict.get("pitch", None)
             energy = batch_dict.get("energy", None)
             speaker = batch_dict.get("speaker_id", None)
+            emotion = batch_dict.get("emotion_id", None)
         else:
             audio, audio_lens, text, text_lens, durs, pitch, speaker = batch
 
@@ -373,6 +399,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             pitch=pitch,
             energy=energy,
             speaker=speaker,
+            emotion=emotion,
             pace=1.0,
             spec=mels if self.learn_alignment else None,
             attn_prior=attn_prior,
@@ -444,6 +471,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             pitch = batch_dict.get("pitch", None)
             energy = batch_dict.get("energy", None)
             speaker = batch_dict.get("speaker_id", None)
+            emotion = batch_dict.get("emotion_id", None)
         else:
             audio, audio_lens, text, text_lens, durs, pitch, speaker = batch
 
@@ -456,6 +484,7 @@ class FastPitchModel(SpectrogramGenerator, Exportable):
             pitch=pitch,
             energy=energy,
             speaker=speaker,
+            emotion=emotion,
             pace=1.0,
             spec=mels if self.learn_alignment else None,
             attn_prior=attn_prior,
