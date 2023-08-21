@@ -51,6 +51,7 @@ from nemo.collections.tts.torch.tts_data_types import (
     P_voiced,
     Pitch,
     SpeakerID,
+    EmotionID,
     TTSDataType,
     Voiced_mask,
     WithLens,
@@ -236,6 +237,7 @@ class TTSDataset(Dataset):
                         "mel_filepath": item["mel_filepath"] if "mel_filepath" in item else None,
                         "duration": item["duration"] if "duration" in item else None,
                         "speaker_id": item["speaker"] if "speaker" in item else None,
+                        "emotion_id": item["emotion"] if "emotion" in item else None,
                     }
 
                     if "normalized_text" in item:
@@ -485,6 +487,9 @@ class TTSDataset(Dataset):
     def add_speaker_id(self, **kwargs):
         pass
 
+    def add_emotion_id(self, **kwargs):
+        pass
+
     def get_spec(self, audio):
         with torch.cuda.amp.autocast(enabled=False):
             spec = self.stft(audio)
@@ -675,7 +680,7 @@ class TTSDataset(Dataset):
                 energy = torch.load(energy_path).float()
             else:
                 spec = self.get_spec(audio)
-                energy = torch.linalg.norm(spec.squeeze(0), axis=0).float()
+                energy = torch.linalg.norm(spec, axis=0).float()
                 torch.save(energy, energy_path)
 
             energy_length = torch.tensor(len(energy)).long()
@@ -684,6 +689,9 @@ class TTSDataset(Dataset):
         speaker_id = None
         if SpeakerID in self.sup_data_types_set:
             speaker_id = torch.tensor(sample["speaker_id"]).long()
+        emotion_id = None
+        if EmotionID in self.sup_data_types_set:
+            emotion_id = torch.tensor(sample["emotion_id"]).long()
 
         return (
             audio,
@@ -702,6 +710,7 @@ class TTSDataset(Dataset):
             voiced_mask,
             p_voiced,
             audio_shifted,
+            emotion_id,
         )
 
     def __len__(self):
@@ -735,6 +744,7 @@ class TTSDataset(Dataset):
             voiced_masks,
             p_voiceds,
             _,
+            _,
         ) = zip(*batch)
 
         max_audio_len = max(audio_lengths).item()
@@ -764,10 +774,12 @@ class TTSDataset(Dataset):
             pitches,
             energies,
             speaker_ids,
+            emotion_ids,
             voiced_masks,
             p_voiceds,
             audios_shifted,
         ) = (
+            [],
             [],
             [],
             [],
@@ -798,6 +810,7 @@ class TTSDataset(Dataset):
                 voiced_mask,
                 p_voiced,
                 audio_shifted,
+                emotion_id,
             ) = sample_tuple
 
             audio = general_padding(audio, audio_len.item(), max_audio_len)
@@ -836,6 +849,9 @@ class TTSDataset(Dataset):
             if SpeakerID in self.sup_data_types_set:
                 speaker_ids.append(speaker_id)
 
+            if EmotionID in self.sup_data_types_set:
+                emotion_ids.append(emotion_id)
+
         data_dict = {
             "audio": torch.stack(audios),
             "audio_lens": torch.stack(audio_lengths),
@@ -850,6 +866,7 @@ class TTSDataset(Dataset):
             "energy": torch.stack(energies) if Energy in self.sup_data_types_set else None,
             "energy_lens": torch.stack(energies_lengths) if Energy in self.sup_data_types_set else None,
             "speaker_id": torch.stack(speaker_ids) if SpeakerID in self.sup_data_types_set else None,
+            "emotion_id": torch.stack(emotion_ids) if EmotionID in self.sup_data_types_set else None,
             "voiced_mask": torch.stack(voiced_masks) if Voiced_mask in self.sup_data_types_set else None,
             "p_voiced": torch.stack(p_voiceds) if P_voiced in self.sup_data_types_set else None,
             "audio_shifted": torch.stack(audios_shifted) if audio_shifted is not None else None,
@@ -1025,6 +1042,7 @@ class VocoderDataset(Dataset):
                     item = json.loads(line)
 
                     if "mel_filepath" not in item and load_precomputed_mel:
+                        print(item)
                         raise ValueError(f"mel_filepath is missing in {manifest_file}")
 
                     file_info = {
